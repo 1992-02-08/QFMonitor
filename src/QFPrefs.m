@@ -28,7 +28,7 @@ NSString *const QFPrefsPath = @"/var/mobile/Library/Preferences/com.qfmonitor.hu
     NSDictionary *d = [NSDictionary dictionaryWithContentsOfFile:QFPrefsPath];
     if (![d isKindOfClass:[NSDictionary class]]) d = @{};
 
-    self.fontSize = [self num:d[@"fontSize"] def:11.0];
+    self.fontSize = [self num:d[@"fontSize"] def:10.0];
     if (self.fontSize < 8.0)  self.fontSize = 8.0;
     if (self.fontSize > 24.0) self.fontSize = 24.0;
 
@@ -40,8 +40,8 @@ NSString *const QFPrefsPath = @"/var/mobile/Library/Preferences/com.qfmonitor.hu
     self.showUp      = [self bool:d[@"showUp"]      def:YES];
     self.showBattery = [self bool:d[@"showBattery"] def:YES];
     self.showTemp    = [self bool:d[@"showTemp"]    def:YES];
-    self.showPower   = [self bool:d[@"showPower"]   def:YES];
-    self.showCurrent = [self bool:d[@"showCurrent"] def:YES];
+    self.showPower   = [self bool:d[@"showPower"]   def:NO];
+    self.showCurrent = [self bool:d[@"showCurrent"] def:NO];
     self.showCPU     = [self bool:d[@"showCPU"]     def:YES];
     self.showFPS     = [self bool:d[@"showFPS"]     def:YES];
 

@@ -98,7 +98,17 @@ extern int posix_spawnattr_set_persona_gid_np(const posix_spawnattr_t * __restri
 
 - (void)viewDidAppear:(BOOL)animated {
     [super viewDidAppear:animated];
-    QFLog(@"QFHUDController viewDidAppear, rowView.frame=%@ window=%@",
+
+    // 窗口 bounds 在此时可能还没生效, 兜底用屏幕尺寸
+    if (CGRectGetWidth(self.view.bounds) < 1.0) {
+        self.view.frame = [UIScreen mainScreen].bounds;
+    }
+    CGFloat W = CGRectGetWidth(self.view.bounds);
+    [self.rowView refreshTextConstrainedToWidth:(W > 0 ? W - 16.0 : CGRectGetWidth([UIScreen mainScreen].bounds) - 16.0)];
+    [self layoutRow];
+
+    QFLog(@"QFHUDController viewDidAppear, view.bounds=%@ rowView.frame=%@ window=%@",
+          NSStringFromCGRect(self.view.bounds),
           NSStringFromCGRect(self.rowView.frame), self.view.window);
     [QFTouchBridge install];
     notify_post(QF_NOTIFY_LAUNCHED);
@@ -130,9 +140,21 @@ extern int posix_spawnattr_set_persona_gid_np(const posix_spawnattr_t * __restri
     QFPrefs *p = [QFPrefs shared];
     CGFloat W = CGRectGetWidth(self.view.bounds);
     CGFloat H = CGRectGetHeight(self.view.bounds);
-    if (W <= 0 || H <= 0) return;
+    if (W <= 1.0 || H <= 1.0) {
+        // 窗口 bounds 还没生效: 用屏幕尺寸兜底
+        CGRect sb = [UIScreen mainScreen].bounds;
+        W = CGRectGetWidth(sb);
+        H = CGRectGetHeight(sb);
+    }
+    if (W <= 1.0 || H <= 1.0) return;
 
     CGSize s = self.rowView.bounds.size;
+    // rowView 还没有尺寸: 先按当前可用宽度重排, 避免用 0 尺寸定位
+    if (s.width <= 1.0 || s.height <= 1.0) {
+        [self.rowView refreshTextConstrainedToWidth:(W - 16.0)];
+        s = self.rowView.bounds.size;
+    }
+
     CGFloat x = p.posX * W;
     CGFloat y = p.posY * H;
 
