@@ -135,11 +135,22 @@ extern int posix_spawnattr_set_persona_gid_np(const posix_spawnattr_t * __restri
     CGSize s = self.rowView.bounds.size;
     CGFloat x = p.posX * W;
     CGFloat y = p.posY * H;
-    if (s.width > 0) {
-        x = MAX(s.width / 2.0, MIN(W - s.width / 2.0, x));
+
+    // 安全区: 顶部留出状态栏/灵动岛高度, 否则会被系统 UI 压住看不见
+    UIEdgeInsets insets = UIEdgeInsetsZero;
+    if (@available(iOS 11.0, *)) {
+        insets = self.view.safeAreaInsets;
     }
-    if (s.height > 0) {
-        y = MAX(s.height / 2.0, MIN(H - s.height / 2.0, y));
+    CGFloat minY = MAX(insets.top, 24.0) + s.height / 2.0 + 4.0;
+    CGFloat maxY = H - MAX(insets.bottom, 8.0) - s.height / 2.0;
+    CGFloat minX = s.width / 2.0 + 2.0;
+    CGFloat maxX = W - s.width / 2.0 - 2.0;
+
+    if (s.width > 0 && maxX >= minX) {
+        x = MAX(minX, MIN(maxX, x));
+    }
+    if (s.height > 0 && maxY >= minY) {
+        y = MAX(minY, MIN(maxY, y));
     }
     self.rowView.center = CGPointMake(x, y);
 }

@@ -680,10 +680,16 @@
     CGFloat H = CGRectGetHeight(self.bounds);
     if (W <= 0 || H <= 0) return;
 
-    // 底部抽屉: 高度不超过屏高的 76%, 也不低于 300
-    CGFloat cardH = MIN(620.0, MAX(300.0, H * 0.76));
-    self.card.frame = CGRectMake(0, H - cardH, W, cardH);
-    self.handle.frame = CGRectMake((W - 38) / 2.0, 8, 38, 5);
+    // 顶部横幅: 从状态栏下方展开, 高度自适应但不超过屏高 76%
+    CGFloat topInset = 0;
+    if (@available(iOS 11.0, *)) {
+        topInset = self.safeAreaInsets.top;
+    }
+    if (topInset <= 0) topInset = 48.0;
+
+    CGFloat cardH = MIN(620.0, MAX(280.0, H * 0.62));
+    self.card.frame = CGRectMake(0, topInset, W, cardH);
+    self.handle.frame = CGRectMake((W - 38) / 2.0, cardH - 13, 38, 5);
     self.titleLabel.frame = CGRectMake(QFPMargin, 20, W - QFPMargin * 2 - 60, 22);
     self.subtitleLabel.frame = CGRectMake(QFPMargin, 42, W - QFPMargin * 2 - 60, 14);
     self.closeButton.frame = CGRectMake(W - QFPMargin - 50, 18, 50, 26);
@@ -714,7 +720,8 @@
     if (animated) {
         self.alpha = 0;
         CGFloat H = CGRectGetHeight(self.card.bounds);
-        self.card.transform = CGAffineTransformMakeTranslation(0, H);
+        // 顶部横幅: 从上方滑入
+        self.card.transform = CGAffineTransformMakeTranslation(0, -H);
         [UIView animateWithDuration:0.28
                               delay:0
                             usingSpringWithDamping:0.92

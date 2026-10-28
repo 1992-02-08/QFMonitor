@@ -46,7 +46,7 @@ NSString *const QFPrefsPath = @"/var/mobile/Library/Preferences/com.qfmonitor.hu
     self.showFPS     = [self bool:d[@"showFPS"]     def:YES];
 
     self.posX = [self num:d[@"posX"] def:0.5];
-    self.posY = [self num:d[@"posY"] def:0.075];
+    self.posY = [self num:d[@"posY"] def:0.14];
     if (self.posX < 0) self.posX = 0;
     if (self.posX > 1) self.posX = 1;
     if (self.posY < 0) self.posY = 0;
@@ -116,7 +116,7 @@ NSString *const QFPrefsPath = @"/var/mobile/Library/Preferences/com.qfmonitor.hu
 
 - (void)resetPosition {
     self.posX = 0.5;
-    self.posY = 0.075;
+    self.posY = 0.14;
     [self save];
 }
 
