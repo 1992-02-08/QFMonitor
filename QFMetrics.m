@@ -215,7 +215,7 @@
 #pragma mark - Battery detail (temp / power via IOKit)
 
 - (void)sampleBatteryDetail {
-    io_service_t service = IOServiceGetMatchingService(kIOMainPortDefault,
+    io_service_t service = IOServiceGetMatchingService(kIOMasterPortDefault,
                                                        IOServiceMatching("AppleSmartBattery"));
     if (service == MACH_PORT_NULL) {
         self.temperature = -9999;
