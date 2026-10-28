@@ -24,9 +24,14 @@ jobs:
       - name: Build app and package
         run: |
           make clean || true
-          make package FINALPACKAGE=1
-          find .theos -name "*.ipa" -exec cp {} ./QFMonitor.ipa \;
-          ls -la QFMonitor.ipa || true
+          make
+          APP=".theos/obj/arm64/QFMonitor.app"
+          ls -la "$APP"
+          mkdir -p Payload
+          cp -r "$APP" Payload/QFMonitor.app
+          cp Info.plist Payload/QFMonitor.app/Info.plist
+          zip -qry QFMonitor.ipa Payload
+          ls -la QFMonitor.ipa
 
 
       - name: Upload IPA
