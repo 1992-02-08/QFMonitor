@@ -106,6 +106,10 @@ extern int posix_spawnattr_set_persona_gid_np(const posix_spawnattr_t * __restri
 
 - (void)viewDidLayoutSubviews {
     [super viewDidLayoutSubviews];
+    CGFloat W = CGRectGetWidth(self.view.bounds);
+    if (W > 0) {
+        [self.rowView refreshTextConstrainedToWidth:W - 16.0];
+    }
     [self layoutRow];
 }
 

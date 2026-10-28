@@ -78,10 +78,51 @@
 #pragma mark - 文字构建
 
 - (NSAttributedString *)buildText {
+    return [self buildTextWithFontSize:self.currentFontSize];
+}
+
+- (NSString *)buildTextPlain {
+    QFPrefs *p = [QFPrefs shared];
+    QFMetrics *m = [QFMetrics shared];
+    NSMutableArray<NSString *> *segs = [NSMutableArray array];
+
+    if (p.showCPU)   [segs addObject:[NSString stringWithFormat:@"CPU %.0f%%", m.cpuPercent]];
+    if (p.showFPS)   [segs addObject:[NSString stringWithFormat:@"FPS %.0f", m.fps]];
+    if (p.showUp)    [segs addObject:[NSString stringWithFormat:@"上传↑ %@", [QFMetrics formatRate:m.upBps]]];
+    if (p.showDown)  [segs addObject:[NSString stringWithFormat:@"下载↓ %@", [QFMetrics formatRate:m.downBps]]];
+    if (p.showBattery)
+        [segs addObject:[NSString stringWithFormat:@"电池 %d%%%@", m.batteryPercent, m.charging ? @"⚡" : @""]];
+    if (p.showCurrent) {
+        NSString *c = m.currentValid ? [NSString stringWithFormat:@"%ldmA", (long)lround(m.currentMa)] : @"--mA";
+        [segs addObject:[@"电流 " stringByAppendingString:c]];
+    }
+    if (p.showPower) {
+        NSString *w = m.wattValid ? [NSString stringWithFormat:@"%.1fW", m.watt] : @"--W";
+        [segs addObject:[@"瓦数 " stringByAppendingString:w]];
+    }
+    if (p.showTemp) {
+        NSString *t = (m.temperatureC > -100.0) ? [NSString stringWithFormat:@"%.0f°C", m.temperatureC] : @"--°C";
+        [segs addObject:[@"温度 " stringByAppendingString:t]];
+    }
+
+    NSMutableString *s = [[segs componentsJoinedByString:@"  "] mutableCopy];
+    if (p.locked) {
+        if (s.length) [s appendString:@"  "];
+        [s appendString:@"🔒"];
+    }
+    if (s.length == 0) s = [@"QFMonitor" mutableCopy];
+    return s;
+}
+
+- (void)rebuildTextWithFontSize:(CGFloat)fs {
+    self.metricsLabel.attributedText = [self buildTextWithFontSize:fs];
+}
+
+- (NSAttributedString *)buildTextWithFontSize:(CGFloat)fontSize {
     QFPrefs *p = [QFPrefs shared];
     QFMetrics *m = [QFMetrics shared];
 
-    CGFloat fs = p.fontSize * p.scale;
+    CGFloat fs = fontSize;
     if (fs < 6.0) fs = 6.0;
     if (fs > 46.0) fs = 46.0;
 
@@ -191,8 +232,14 @@
 #pragma mark - 刷新
 
 - (void)refreshText {
-    self.metricsLabel.attributedText = [self buildText];
-    [self relayout];
+    [self refreshTextConstrainedToWidth:CGFLOAT_MAX];
+}
+
+- (void)refreshTextConstrainedToWidth:(CGFloat)maxWidth {
+    if (maxWidth <= 1.0) maxWidth = CGFLOAT_MAX;
+    // 先按当前字号估算, 若超宽就在 relayout 里缩
+    self.metricsLabel.attributedText = [self buildTextWithFontSize:self.currentFontSize];
+    [self relayoutConstrainedToWidth:maxWidth];
 }
 
 - (void)applyPrefs {
@@ -205,6 +252,15 @@
 
     UIColor *accent = [[self class] accentPalette][MIN(MAX(p.accent, 0), 5)];
 
+    [self configureGearForSize:fs];
+
+    [self refreshText];
+}
+
+- (void)configureGearForSize:(CGFloat)fs {
+    QFPrefs *p = [QFPrefs shared];
+    UIColor *accent = [[self class] accentPalette][MIN(MAX(p.accent, 0), 5)];
+
     UIImageSymbolConfiguration *cfg =
         [UIImageSymbolConfiguration configurationWithPointSize:fs * 0.95
                                                          weight:UIImageSymbolWeightSemibold];
@@ -215,23 +271,57 @@
                          forState:UIControlStateNormal];
     }
     self.gearButton.tintColor = accent;
-
-    [self refreshText];
 }
 
 - (void)relayout {
+    [self relayoutConstrainedToWidth:CGFLOAT_MAX];
+}
+
+// 在给定最大宽度内布局: 文字放不下时按比例缩字号(最低 5pt)
+- (void)relayoutConstrainedToWidth:(CGFloat)maxWidth {
+    if (maxWidth <= 1.0) maxWidth = CGFLOAT_MAX;
+
+    CGFloat fs = self.currentFontSize;
+
+    NSString *plain = [self buildTextPlain];
+    UIFont *font = [UIFont monospacedDigitSystemFontOfSize:fs weight:UIFontWeightSemibold];
+
+    CGFloat gearSize = MAX(8.0, fs * 0.95);
+    CGFloat gap = MAX(3.0, fs * 0.45);
+    CGFloat avail = maxWidth - gap - gearSize;
+    if (avail < 20.0) avail = maxWidth;   // 极限情况: 只保证不越界
+
+    CGSize measured = [plain sizeWithAttributes:@{NSFontAttributeName: font}];
+    if (maxWidth != CGFLOAT_MAX && measured.width > avail && measured.width > 0) {
+        CGFloat scaled = fs * (avail / measured.width);
+        if (scaled < 5.0) scaled = 5.0;
+        if (scaled < fs) {
+            fs = scaled;
+            font = [UIFont monospacedDigitSystemFontOfSize:fs weight:UIFontWeightSemibold];
+            [self configureGearForSize:fs];
+            gearSize = MAX(8.0, fs * 0.95);
+            gap = MAX(3.0, fs * 0.45);
+            measured = [plain sizeWithAttributes:@{NSFontAttributeName: font}];
+        }
+    }
+
+    // 用最终字号重建富文本(颜色分段)
+    [self rebuildTextWithFontSize:fs];
+
     CGSize ms = [self.metricsLabel sizeThatFits:CGSizeMake(CGFLOAT_MAX, CGFLOAT_MAX)];
     ms.width = ceil(ms.width);
     ms.height = ceil(ms.height);
 
-    CGFloat gap = MAX(4.0, self.currentFontSize * 0.45);
-    CGFloat gearSize = MAX(10.0, self.currentFontSize * 0.95);
-
     CGSize total = CGSizeMake(ms.width + gap + gearSize, MAX(ms.height, gearSize));
+    // 最后一道保险: 总宽不超过 maxWidth
+    if (maxWidth != CGFLOAT_MAX && total.width > maxWidth) {
+        total.width = maxWidth;
+    }
 
     self.metricsLabel.frame = CGRectMake(0, (total.height - ms.height) / 2.0,
-                                         ms.width, ms.height);
-    self.gearButton.frame = CGRectMake(ms.width + gap, (total.height - gearSize) / 2.0,
+                                         MIN(ms.width, total.width), ms.height);
+    self.gearButton.frame = CGRectMake(MAX(0.0, total.width - gearSize),
+                                       (total.height - gearSize) / 2.0,
                                        gearSize, gearSize);
 
     // 保持中心不变

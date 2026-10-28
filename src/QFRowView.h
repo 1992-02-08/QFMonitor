@@ -29,6 +29,9 @@
 // 依据当前指标 + 偏好刷新文字与尺寸
 - (void)refreshText;
 
+// 依据当前指标刷新, 并限制悬浮条总宽不超过 maxWidth(超出则自动缩字号)
+- (void)refreshTextConstrainedToWidth:(CGFloat)maxWidth;
+
 // 依据偏好(字号 / 缩放 / 配色 / 显示开关)重建外观
 - (void)applyPrefs;
 
