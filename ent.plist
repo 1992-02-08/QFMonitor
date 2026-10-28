@@ -3,7 +3,7 @@
 <plist version="1.0">
 <dict>
 	<key>application-identifier</key>
-	<string>com.qfmonitor.app</string>
+	<string>com.qfmonitor.hudapp</string>
 	<key>com.apple.QuartzCore.displayable-context</key>
 	<true/>
 	<key>com.apple.QuartzCore.secure-mode</key>

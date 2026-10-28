@@ -11,30 +11,15 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Install theos
-        run: |
-          export THEOS="$HOME/theos"
-          git clone --recursive --depth 1 https://github.com/theos/theos.git "$THEOS"
-          echo "THEOS=$THEOS" >> $GITHUB_ENV
-
       - name: Install ldid (signing tool)
         run: |
           brew install ldid || (which ldid && echo "ldid already present")
 
-      - name: Build app and package
+      - name: Build IPA with build.sh
         run: |
-          make clean || true
-          make
-          APP=".theos/obj/arm64/QFMonitor.app"
-          ls -la "$APP"
-          ldid -Sent.plist "$APP/QFMonitor" && echo "signed with ldid" || echo "ldid signing failed"
-          rm -rf "$APP/QFMonitor.dSYM" && echo "removed dSYM"
-          mkdir -p Payload
-          cp -r "$APP" Payload/QFMonitor.app
-          cp Info.plist Payload/QFMonitor.app/Info.plist
-          zip -qry QFMonitor.ipa Payload
+          chmod +x build.sh
+          ./build.sh QFMonitor.ipa
           ls -la QFMonitor.ipa
-
 
       - name: Upload IPA
         uses: actions/upload-artifact@v4
