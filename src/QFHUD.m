@@ -148,33 +148,49 @@ extern int posix_spawnattr_set_persona_gid_np(const posix_spawnattr_t * __restri
     }
     if (W <= 1.0 || H <= 1.0) return;
 
+    CGFloat availW = MAX(60.0, W - 16.0);
+
+    // 1) 先无条件按可用宽度重排(超过屏幕就换行), 保证宽度绝不大于 availW
+    [self.rowView refreshTextConstrainedToWidth:availW];
     CGSize s = self.rowView.bounds.size;
-    // rowView 还没有尺寸: 先按当前可用宽度重排, 避免用 0 尺寸定位
     if (s.width <= 1.0 || s.height <= 1.0) {
-        [self.rowView refreshTextConstrainedToWidth:(W - 16.0)];
-        s = self.rowView.bounds.size;
+        // 重排后仍无效: 给一个最小可视尺寸, 至少能看到东西
+        s = CGSizeMake(MIN(availW, 200.0), 22.0);
+        self.rowView.bounds = CGRectMake(0, 0, s.width, s.height);
+    }
+    if (s.width > availW) {
+        // 最后一道保险: 硬裁到可用宽度
+        s.width = availW;
+        self.rowView.bounds = CGRectMake(0, 0, s.width, s.height);
     }
 
     CGFloat x = p.posX * W;
     CGFloat y = p.posY * H;
 
-    // 安全区: 顶部留出状态栏/灵动岛高度, 否则会被系统 UI 压住看不见
     UIEdgeInsets insets = UIEdgeInsetsZero;
     if (@available(iOS 11.0, *)) {
         insets = self.view.safeAreaInsets;
     }
-    CGFloat minY = MAX(insets.top, 24.0) + s.height / 2.0 + 4.0;
-    CGFloat maxY = H - MAX(insets.bottom, 8.0) - s.height / 2.0;
-    CGFloat minX = s.width / 2.0 + 2.0;
-    CGFloat maxX = W - s.width / 2.0 - 2.0;
+    CGFloat halfW = s.width / 2.0;
+    CGFloat halfH = s.height / 2.0;
 
-    if (s.width > 0 && maxX >= minX) {
-        x = MAX(minX, MIN(maxX, x));
+    // 2) 水平位置: 必须保证整条都在屏内
+    if (halfW * 2.0 >= W) {
+        x = W / 2.0;                              // 宽度等于屏宽: 居中
+    } else {
+        x = MAX(halfW + 1.0, MIN(W - halfW - 1.0, x));
     }
-    if (s.height > 0 && maxY >= minY) {
-        y = MAX(minY, MIN(maxY, y));
-    }
+
+    // 3) 垂直位置: 避开状态栏/底部
+    CGFloat minY = MAX(insets.top, 24.0) + halfH + 4.0;
+    CGFloat maxY = H - MAX(insets.bottom, 8.0) - halfH;
+    if (maxY < minY) y = H / 2.0;                 // 空间不足: 居中
+    else y = MAX(minY, MIN(maxY, y));
+
     self.rowView.center = CGPointMake(x, y);
+
+    QFLog(@"layoutRow W=%.0f H=%.0f row=%.0fx%.0f center=(%.0f,%.0f) insets=%.0f",
+          W, H, s.width, s.height, x, y, insets.top);
 }
 
 #pragma mark - 屏幕旋转

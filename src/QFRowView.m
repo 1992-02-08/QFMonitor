@@ -317,6 +317,11 @@
     [self rebuildTextWithFontSize:fs constrainedToWidth:textW];
     [self configureGearForSize:fs];
 
+    // 关键: UILabel 多行测量必须设置 preferredMaxLayoutWidth, 否则 sizeThatFits 会按单行返回
+    self.metricsLabel.preferredMaxLayoutWidth = textW;
+    self.metricsLabel.numberOfLines = 0;
+    self.metricsLabel.lineBreakMode = NSLineBreakByCharWrapping;
+
     // 用 textW 计算换行后的实际高度
     CGSize ms = [self.metricsLabel sizeThatFits:CGSizeMake(textW, CGFLOAT_MAX)];
     ms.width = ceil(MIN(ms.width, textW));
