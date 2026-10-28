@@ -17,20 +17,13 @@ jobs:
           git clone --recursive --depth 1 https://github.com/theos/theos.git "$THEOS"
           echo "THEOS=$THEOS" >> $GITHUB_ENV
 
-      - name: Build app
+      - name: Build app and package
         run: |
           make clean || true
-          make
-          find .theos -name "*.app" -maxdepth 4 2>/dev/null || true
+          make package FINALPACKAGE=1
+          find .theos -name "*.ipa" -exec cp {} ./QFMonitor.ipa \;
+          ls -la QFMonitor.ipa || true
 
-      - name: Package IPA
-        run: |
-          APP=.theos/_/Applications/QFMonitor.app
-          if [ ! -d "$APP" ]; then echo "app not found"; exit 1; fi
-          mkdir -p build/Payload
-          cp -R "$APP" build/Payload/QFMonitor.app
-          cd build && zip -r ../QFMonitor.ipa Payload
-          ls -la ../QFMonitor.ipa
 
       - name: Upload IPA
         uses: actions/upload-artifact@v4
