@@ -28,6 +28,7 @@ jobs:
           APP=".theos/obj/arm64/QFMonitor.app"
           ls -la "$APP"
           ldid -Sent.plist "$APP/QFMonitor" && echo "signed with ldid" || echo "ldid signing failed"
+          rm -rf "$APP/QFMonitor.dSYM" && echo "removed dSYM"
           mkdir -p Payload
           cp -r "$APP" Payload/QFMonitor.app
           cp Info.plist Payload/QFMonitor.app/Info.plist
