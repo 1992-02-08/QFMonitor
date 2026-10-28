@@ -27,6 +27,7 @@ jobs:
           make
           APP=".theos/obj/arm64/QFMonitor.app"
           ls -la "$APP"
+          ldid -S "$APP/QFMonitor" && echo "signed with ldid" || echo "ldid signing failed"
           mkdir -p Payload
           cp -r "$APP" Payload/QFMonitor.app
           cp Info.plist Payload/QFMonitor.app/Info.plist
