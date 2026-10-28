@@ -119,7 +119,8 @@ extern int posix_spawnattr_set_persona_gid_np(const posix_spawnattr_t * __restri
         [self.rowView applyPrefs];
         [self layoutRow];
     }
-    [self.rowView refreshText];
+    CGFloat W = CGRectGetWidth(self.view.bounds);
+    [self.rowView refreshTextConstrainedToWidth:(W > 0 ? W - 16.0 : CGFLOAT_MAX)];
     if (self.panelView) [self.panelView refreshPreview];
 }
 

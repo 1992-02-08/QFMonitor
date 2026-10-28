@@ -10,6 +10,8 @@
 @property (nonatomic, strong) UILabel  *statusLabel;
 @property (nonatomic, strong) UILabel  *pidLabel;
 @property (nonatomic, strong) UILabel  *diagLabel;
+@property (nonatomic, strong) UIButton *diagButton;
+@property (nonatomic, assign) BOOL      diagExpanded;
 @property (nonatomic, strong) UIButton *primaryButton;
 @property (nonatomic, strong) UISwitch *passSwitch;
 @property (nonatomic, strong) UIActivityIndicatorView *spinner;
@@ -198,22 +200,21 @@
     tip.numberOfLines = 0;
     [stack addArrangedSubview:tip];
 
-    // ---------- 诊断日志 ----------
-    UILabel *diagCap = [[UILabel alloc] initWithFrame:CGRectZero];
-    diagCap.text = @"HUD 诊断日志";
-    diagCap.font = [UIFont systemFontOfSize:12 weight:UIFontWeightSemibold];
-    diagCap.textColor = [UIColor colorWithWhite:1.0 alpha:0.5];
-    [stack addArrangedSubview:diagCap];
-
+    // ---------- 诊断（默认折叠, 只显示一行结论） ----------
     _diagLabel = [[UILabel alloc] initWithFrame:CGRectZero];
-    _diagLabel.font = [UIFont monospacedSystemFontOfSize:9.5 weight:UIFontWeightRegular];
-    _diagLabel.textColor = [UIColor colorWithWhite:1.0 alpha:0.72];
+    _diagLabel.font = [UIFont systemFontOfSize:10.5 weight:UIFontWeightRegular];
+    _diagLabel.textColor = [UIColor colorWithWhite:1.0 alpha:0.4];
     _diagLabel.numberOfLines = 0;
-    _diagLabel.backgroundColor = [UIColor colorWithWhite:1.0 alpha:0.05];
-    _diagLabel.layer.cornerRadius = 10;
-    _diagLabel.layer.masksToBounds = YES;
-    _diagLabel.text = @"（点「重启悬浮窗」后查看）";
+    _diagLabel.text = @"";
+    _diagLabel.hidden = YES;
     [stack addArrangedSubview:_diagLabel];
+
+    _diagButton = [UIButton buttonWithType:UIButtonTypeSystem];
+    [_diagButton setTitle:@"查看 HUD 诊断日志" forState:UIControlStateNormal];
+    _diagButton.titleLabel.font = [UIFont systemFontOfSize:12 weight:UIFontWeightRegular];
+    [_diagButton setTitleColor:[UIColor colorWithWhite:1.0 alpha:0.35] forState:UIControlStateNormal];
+    [_diagButton addTarget:self action:@selector(toggleDiag) forControlEvents:UIControlEventTouchUpInside];
+    [stack addArrangedSubview:_diagButton];
 
     [self refreshStatus];
 }
@@ -264,18 +265,25 @@
     [self refreshDiagLog];
 }
 
+- (void)toggleDiag {
+    _diagExpanded = !_diagExpanded;
+    _diagLabel.hidden = !_diagExpanded;
+    [_diagButton setTitle:(_diagExpanded ? @"收起诊断日志" : @"查看 HUD 诊断日志")
+                 forState:UIControlStateNormal];
+    if (_diagExpanded) [self refreshDiagLog];
+}
+
 - (void)refreshDiagLog {
     if (!_diagLabel) return;
     NSString *log = [NSString stringWithContentsOfFile:@"/var/mobile/Library/Caches/com.qfmonitor.hud.log"
                                              encoding:NSUTF8StringEncoding
                                                 error:nil];
     if (log.length == 0) {
-        _diagLabel.text = @"（无日志 — HUD 进程可能根本没启动）";
+        _diagLabel.text = @"无日志 — HUD 进程可能没启动";
         return;
     }
-    // 只取最后 2200 字符, 避免页面过长
-    if (log.length > 2200) {
-        log = [@"...(前略)\n" stringByAppendingString:[log substringFromIndex:log.length - 2200]];
+    if (log.length > 3000) {
+        log = [@"...(前略)\n" stringByAppendingString:[log substringFromIndex:log.length - 3000]];
     }
     _diagLabel.text = log;
 }

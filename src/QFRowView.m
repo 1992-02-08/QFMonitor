@@ -254,7 +254,8 @@
 
     [self configureGearForSize:fs];
 
-    [self refreshText];
+    CGFloat w = CGRectGetWidth(self.window.bounds);
+    [self refreshTextConstrainedToWidth:(w > 0 ? w - 16.0 : CGFLOAT_MAX)];
 }
 
 - (void)configureGearForSize:(CGFloat)fs {
