@@ -17,6 +17,10 @@ jobs:
           git clone --recursive --depth 1 https://github.com/theos/theos.git "$THEOS"
           echo "THEOS=$THEOS" >> $GITHUB_ENV
 
+      - name: Install ldid (signing tool)
+        run: |
+          brew install ldid || (which ldid && echo "ldid already present")
+
       - name: Build app and package
         run: |
           make clean || true
