@@ -10,6 +10,7 @@
 #import "UIEventDispatcher.h"
 #import "UIEventFetcher.h"
 #import "SBSAccessibilityWindowHostingController.h"
+#import "QFLog.h"
 #import "QFTouch.h"
 #import "QFRowView.h"
 #import "QFPanelView.h"
@@ -319,7 +320,7 @@ didFinishLaunchingWithOptions:(NSDictionary *)launchOptions {
     self.window = win;
     QFLog(@"window visible=%d hidden=%d level=%.0f contextId=%u windows=%lu",
           win.isKeyWindow, win.hidden, win.windowLevel, [win _contextId],
-          (unsigned long)[[UIApplication sharedApplication].windows.count]);
+          (unsigned long)[[UIApplication sharedApplication].windows count]);
 
     [self registerWindow:win];
     QFLog(@"didFinishLaunchingWithOptions DONE");
