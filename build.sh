@@ -14,6 +14,11 @@ cd "$ROOT"
 APP_NAME="QFMonitor"
 BUILD="$ROOT/build"
 OUT_IPA="${1:-$ROOT/1.ipa}"
+# 相对路径转绝对, 避免 cd 到 build/ 后写错位置
+case "$OUT_IPA" in
+  /*) ;;
+  *) OUT_IPA="$ROOT/$OUT_IPA" ;;
+esac
 
 SDK_PATH="$(xcrun --sdk iphoneos --show-sdk-path)"
 echo ">> SDK: $SDK_PATH"
