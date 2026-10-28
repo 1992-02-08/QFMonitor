@@ -26,8 +26,8 @@
         self.userInteractionEnabled = YES;
 
         _metricsLabel = [[UILabel alloc] initWithFrame:CGRectZero];
-        _metricsLabel.numberOfLines = 1;
-        _metricsLabel.lineBreakMode = NSLineBreakByClipping;
+        _metricsLabel.numberOfLines = 0;                 // 允许换行成多行
+        _metricsLabel.lineBreakMode = NSLineBreakByCharWrapping;
         _metricsLabel.backgroundColor = [UIColor clearColor];
         _metricsLabel.textAlignment = NSTextAlignmentLeft;
         [self addSubview:_metricsLabel];
@@ -115,7 +115,22 @@
 }
 
 - (void)rebuildTextWithFontSize:(CGFloat)fs {
-    self.metricsLabel.attributedText = [self buildTextWithFontSize:fs];
+    [self rebuildTextWithFontSize:fs constrainedToWidth:CGFLOAT_MAX];
+}
+
+- (void)rebuildTextWithFontSize:(CGFloat)fs constrainedToWidth:(CGFloat)width {
+    NSAttributedString *as = [self buildTextWithFontSize:fs];
+    NSMutableAttributedString *m = [as mutableCopy];
+
+    NSMutableParagraphStyle *ps = [[NSMutableParagraphStyle alloc] init];
+    ps.lineBreakMode = NSLineBreakByCharWrapping;
+    ps.alignment = NSTextAlignmentLeft;
+    ps.lineSpacing = 1.0;
+    [m addAttribute:NSParagraphStyleAttributeName value:ps range:NSMakeRange(0, m.length)];
+
+    self.metricsLabel.attributedText = m;
+    self.metricsLabel.lineBreakMode = NSLineBreakByCharWrapping;
+    self.metricsLabel.numberOfLines = 0;
 }
 
 - (NSAttributedString *)buildTextWithFontSize:(CGFloat)fontSize {
@@ -237,8 +252,6 @@
 
 - (void)refreshTextConstrainedToWidth:(CGFloat)maxWidth {
     if (maxWidth <= 1.0) maxWidth = CGFLOAT_MAX;
-    // 先按当前字号估算, 若超宽就在 relayout 里缩
-    self.metricsLabel.attributedText = [self buildTextWithFontSize:self.currentFontSize];
     [self relayoutConstrainedToWidth:maxWidth];
 }
 
@@ -278,50 +291,45 @@
     [self relayoutConstrainedToWidth:CGFLOAT_MAX];
 }
 
-// 在给定最大宽度内布局: 文字放不下时按比例缩字号(最低 5pt)
+// 在给定最大宽度内布局: 绝不缩字号, 用自动换行(多行)适配宽度
 - (void)relayoutConstrainedToWidth:(CGFloat)maxWidth {
     if (maxWidth <= 1.0) maxWidth = CGFLOAT_MAX;
 
     CGFloat fs = self.currentFontSize;
 
-    NSString *plain = [self buildTextPlain];
-    UIFont *font = [UIFont monospacedDigitSystemFontOfSize:fs weight:UIFontWeightSemibold];
-
+    // 齿轮固定在右侧
     CGFloat gearSize = MAX(8.0, fs * 0.95);
     CGFloat gap = MAX(3.0, fs * 0.45);
-    CGFloat avail = maxWidth - gap - gearSize;
-    if (avail < 20.0) avail = maxWidth;   // 极限情况: 只保证不越界
 
-    CGSize measured = [plain sizeWithAttributes:@{NSFontAttributeName: font}];
-    if (maxWidth != CGFLOAT_MAX && measured.width > avail && measured.width > 0) {
-        CGFloat scaled = fs * (avail / measured.width);
-        if (scaled < 5.0) scaled = 5.0;
-        if (scaled < fs) {
-            fs = scaled;
-            font = [UIFont monospacedDigitSystemFontOfSize:fs weight:UIFontWeightSemibold];
-            [self configureGearForSize:fs];
-            gearSize = MAX(8.0, fs * 0.95);
-            gap = MAX(3.0, fs * 0.45);
-            measured = [plain sizeWithAttributes:@{NSFontAttributeName: font}];
-        }
+    // 文字可用宽度
+    CGFloat textW;
+    if (maxWidth == CGFLOAT_MAX) {
+        // 无约束: 按自然宽度单行
+        UIFont *font = [UIFont monospacedDigitSystemFontOfSize:fs weight:UIFontWeightSemibold];
+        NSString *plain = [self buildTextPlain];
+        textW = ceil([plain sizeWithAttributes:@{NSFontAttributeName: font}].width) + 1.0;
+    } else {
+        textW = maxWidth - gearSize - gap;
+        if (textW < 40.0) textW = maxWidth;   // 极端窄屏: 文字占满, 齿轮叠上
     }
 
-    // 用最终字号重建富文本(颜色分段)
-    [self rebuildTextWithFontSize:fs];
+    // 重建富文本(按最终宽度换行)
+    [self rebuildTextWithFontSize:fs constrainedToWidth:textW];
+    [self configureGearForSize:fs];
 
-    CGSize ms = [self.metricsLabel sizeThatFits:CGSizeMake(CGFLOAT_MAX, CGFLOAT_MAX)];
-    ms.width = ceil(ms.width);
+    // 用 textW 计算换行后的实际高度
+    CGSize ms = [self.metricsLabel sizeThatFits:CGSizeMake(textW, CGFLOAT_MAX)];
+    ms.width = ceil(MIN(ms.width, textW));
     ms.height = ceil(ms.height);
 
     CGSize total = CGSizeMake(ms.width + gap + gearSize, MAX(ms.height, gearSize));
-    // 最后一道保险: 总宽不超过 maxWidth
     if (maxWidth != CGFLOAT_MAX && total.width > maxWidth) {
         total.width = maxWidth;
     }
 
     self.metricsLabel.frame = CGRectMake(0, (total.height - ms.height) / 2.0,
-                                         MIN(ms.width, total.width), ms.height);
-    self.gearButton.frame = CGRectMake(MAX(0.0, total.width - gearSize),
+                                         ms.width, ms.height);
+    self.gearButton.frame = CGRectMake(total.width - gearSize,
                                        (total.height - gearSize) / 2.0,
                                        gearSize, gearSize);
 
