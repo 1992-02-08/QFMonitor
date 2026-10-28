@@ -9,6 +9,7 @@
 @interface QFLauncherController ()
 @property (nonatomic, strong) UILabel  *statusLabel;
 @property (nonatomic, strong) UILabel  *pidLabel;
+@property (nonatomic, strong) UILabel  *diagLabel;
 @property (nonatomic, strong) UIButton *primaryButton;
 @property (nonatomic, strong) UISwitch *passSwitch;
 @property (nonatomic, strong) UIActivityIndicatorView *spinner;
