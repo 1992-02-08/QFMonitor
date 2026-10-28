@@ -197,6 +197,23 @@
     tip.numberOfLines = 0;
     [stack addArrangedSubview:tip];
 
+    // ---------- 诊断日志 ----------
+    UILabel *diagCap = [[UILabel alloc] initWithFrame:CGRectZero];
+    diagCap.text = @"HUD 诊断日志";
+    diagCap.font = [UIFont systemFontOfSize:12 weight:UIFontWeightSemibold];
+    diagCap.textColor = [UIColor colorWithWhite:1.0 alpha:0.5];
+    [stack addArrangedSubview:diagCap];
+
+    _diagLabel = [[UILabel alloc] initWithFrame:CGRectZero];
+    _diagLabel.font = [UIFont monospacedSystemFontOfSize:9.5 weight:UIFontWeightRegular];
+    _diagLabel.textColor = [UIColor colorWithWhite:1.0 alpha:0.72];
+    _diagLabel.numberOfLines = 0;
+    _diagLabel.backgroundColor = [UIColor colorWithWhite:1.0 alpha:0.05];
+    _diagLabel.layer.cornerRadius = 10;
+    _diagLabel.layer.masksToBounds = YES;
+    _diagLabel.text = @"（点「重启悬浮窗」后查看）";
+    [stack addArrangedSubview:_diagLabel];
+
     [self refreshStatus];
 }
 
@@ -215,6 +232,10 @@
             if (!QFIsHUDRunning()) {
                 QFStartHUD();
                 [self refreshStatus];
+                dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(2.5 * NSEC_PER_SEC)),
+                               dispatch_get_main_queue(), ^{
+                    [self refreshDiagLog];
+                });
             }
         });
     }
@@ -238,6 +259,24 @@
                                                encoding:NSUTF8StringEncoding
                                                   error:nil];
     _pidLabel.text = pid.length ? [NSString stringWithFormat:@"HUD PID %@", pid] : @" ";
+
+    [self refreshDiagLog];
+}
+
+- (void)refreshDiagLog {
+    if (!_diagLabel) return;
+    NSString *log = [NSString stringWithContentsOfFile:@"/var/mobile/Library/Caches/com.qfmonitor.hud.log"
+                                             encoding:NSUTF8StringEncoding
+                                                error:nil];
+    if (log.length == 0) {
+        _diagLabel.text = @"（无日志 — HUD 进程可能根本没启动）";
+        return;
+    }
+    // 只取最后 2200 字符, 避免页面过长
+    if (log.length > 2200) {
+        log = [@"...(前略)\n" stringByAppendingString:[log substringFromIndex:log.length - 2200]];
+    }
+    _diagLabel.text = log;
 }
 
 - (void)onPrimary {
@@ -252,6 +291,11 @@
                        dispatch_get_main_queue(), ^{
             self->_primaryButton.enabled = YES;
             [self refreshStatus];
+            // 2.5 秒后再刷一次日志, 等 HUD 走完启动流程
+            dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(2.5 * NSEC_PER_SEC)),
+                           dispatch_get_main_queue(), ^{
+                [self refreshDiagLog];
+            });
         });
     });
 }

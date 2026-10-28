@@ -78,6 +78,7 @@ extern int posix_spawnattr_set_persona_gid_np(const posix_spawnattr_t * __restri
 - (void)viewDidLoad {
     [super viewDidLoad];
 
+    QFLog(@"QFHUDController viewDidLoad, view.bounds=%@", NSStringFromCGRect(self.view.bounds));
     self.view.backgroundColor = [UIColor clearColor];
     self.view.userInteractionEnabled = YES;
 
@@ -96,6 +97,8 @@ extern int posix_spawnattr_set_persona_gid_np(const posix_spawnattr_t * __restri
 
 - (void)viewDidAppear:(BOOL)animated {
     [super viewDidAppear:animated];
+    QFLog(@"QFHUDController viewDidAppear, rowView.frame=%@ window=%@",
+          NSStringFromCGRect(self.rowView.frame), self.view.window);
     [QFTouchBridge install];
     notify_post(QF_NOTIFY_LAUNCHED);
 }
@@ -270,6 +273,13 @@ extern int posix_spawnattr_set_persona_gid_np(const posix_spawnattr_t * __restri
                     } else {
                         [fetcher setValue:dispatcher forKey:@"eventFetcherSink"];
                     }
+                    // 上游 TrollSpeed 设置两处: dispatcher.eventFetcher 和 application.eventFetcher
+                    // 少了前者会导致 HID 事件没有消费者
+                    @try {
+                        [dispatcher setValue:fetcher forKey:@"eventFetcher"];
+                    } @catch (NSException *e) {
+                        QFLog(@"dispatcher.eventFetcher failed: %@", e.reason);
+                    }
                     [self setValue:fetcher forKey:@"eventFetcher"];
                 }
             }
@@ -293,30 +303,42 @@ extern int posix_spawnattr_set_persona_gid_np(const posix_spawnattr_t * __restri
 - (BOOL)application:(UIApplication *)application
 didFinishLaunchingWithOptions:(NSDictionary *)launchOptions {
 
-    QFHUDController *vc = [[QFHUDController alloc] init];
+    QFLog(@"didFinishLaunchingWithOptions ENTER");
 
+    QFHUDController *vc = [[QFHUDController alloc] init];
+    QFLog(@"controller = %@", vc);
+
+    QFLog(@"screen bounds = %@", NSStringFromCGRect([UIScreen mainScreen].bounds));
     QFHUDWindow *win = [[QFHUDWindow alloc] initWithFrame:[UIScreen mainScreen].bounds];
+    QFLog(@"window allocated = %@ frame=%@", win, NSStringFromCGRect(win.frame));
     win.rootViewController = vc;
     win.windowLevel = 10000010.0;
     win.backgroundColor = [UIColor clearColor];
     win.hidden = NO;
     [win makeKeyAndVisible];
     self.window = win;
+    QFLog(@"window visible=%d hidden=%d level=%.0f contextId=%u windows=%lu",
+          win.isKeyWindow, win.hidden, win.windowLevel, [win _contextId],
+          (unsigned long)[[UIApplication sharedApplication].windows.count]);
 
     [self registerWindow:win];
+    QFLog(@"didFinishLaunchingWithOptions DONE");
     return YES;
 }
 
 - (void)registerWindow:(UIWindow *)win {
     Class cls = objc_getClass("SBSAccessibilityWindowHostingController");
+    QFLog(@"registerWindow: SBS class = %@", cls);
     if (!cls) {
-        NSLog(@"[QFMonitor] SBSAccessibilityWindowHostingController not found");
+        QFLog(@"[QFMonitor] SBSAccessibilityWindowHostingController not found");
         return;
     }
     id controller = [[cls alloc] init];
+    QFLog(@"SBS controller = %@", controller);
 
     unsigned ctx = [win _contextId];
     double lvl = [win windowLevel];
+    QFLog(@"registerWindowWithContextID ctx=%u level=%.0f", ctx, lvl);
 
     @try {
         NSMethodSignature *sig = [NSMethodSignature signatureWithObjCTypes:"v@:Id"];
@@ -326,8 +348,9 @@ didFinishLaunchingWithOptions:(NSDictionary *)launchOptions {
         [inv setArgument:&ctx atIndex:2];
         [inv setArgument:&lvl atIndex:3];
         [inv invoke];
+        QFLog(@"registerWindow invoked OK");
     } @catch (NSException *e) {
-        NSLog(@"[QFMonitor] registerWindow failed: %@", e.reason);
+        QFLog(@"[QFMonitor] registerWindow failed: %@", e.reason);
     }
 }
 
@@ -337,36 +360,56 @@ didFinishLaunchingWithOptions:(NSDictionary *)launchOptions {
 
 int QFRunHUDProcess(void) {
     @autoreleasepool {
+        QFLogReset();
+        QFLog(@"HUD process start (uid=%d euid=%d)", getuid(), geteuid());
+
         NSString *pidStr = [NSString stringWithFormat:@"%d", getpid()];
-        [pidStr writeToFile:QF_PID_PATH
-                 atomically:YES
-                   encoding:NSUTF8StringEncoding
-                      error:nil];
+        BOOL wrote = [pidStr writeToFile:QF_PID_PATH
+                              atomically:YES
+                                encoding:NSUTF8StringEncoding
+                                   error:nil];
+        QFLog(@"pid file write %@ -> %@", wrote ? @"OK" : @"FAIL", QF_PID_PATH);
 
         [UIScreen initialize];
         CFRunLoopGetCurrent();
+        QFLog(@"screen init OK, bounds=%@", NSStringFromCGRect([UIScreen mainScreen].bounds));
 
         GSInitialize();
+        QFLog(@"GSInitialize done");
         BKSDisplayServicesStart();
+        QFLog(@"BKSDisplayServicesStart done");
         UIApplicationInitialize();
+        QFLog(@"UIApplicationInitialize done");
 
-        UIApplicationInstantiateSingleton(objc_getClass("QFHUDApplication"));
+        Class appCls = objc_getClass("QFHUDApplication");
+        QFLog(@"QFHUDApplication class = %@", appCls);
+        UIApplicationInstantiateSingleton(appCls);
+        QFLog(@"UIApplicationInstantiateSingleton done, shared=%@", UIApplication.sharedApplication);
 
         static id<UIApplicationDelegate> sAppDelegate = nil;
         sAppDelegate = [[objc_getClass("QFHUDApplicationDelegate") alloc] init];
+        QFLog(@"delegate = %@", sAppDelegate);
         [UIApplication.sharedApplication setDelegate:sAppDelegate];
         [UIApplication.sharedApplication _accessibilityInit];
+        QFLog(@"_accessibilityInit done");
 
         if (@available(iOS 15.0, *)) {
             GSEventInitialize(0);
             GSEventPushRunLoopMode(kCFRunLoopDefaultMode);
+            QFLog(@"GSEventInitialize done");
         }
 
+        QFLog(@"calling __completeAndRunAsPlugin ...");
         [UIApplication.sharedApplication __completeAndRunAsPlugin];
+        QFLog(@"__completeAndRunAsPlugin returned; windows=%lu",
+              (unsigned long)[[UIApplication.sharedApplication windows] count]);
 
         [QFTouchBridge install];
+        QFLog(@"touch bridge installed");
 
+        QFLog(@"entering CFRunLoopRun");
         CFRunLoopRun();
+        QFLog(@"CFRunLoopRun returned (unexpected)");
     }
     return EXIT_SUCCESS;
 }
@@ -418,31 +461,32 @@ void QFStartHUD(void) {
     // 优先用 platform persona + uid 0 启动(HUD 需要 root 才能全局显示)
     posix_spawnattr_t attr;
     posix_spawnattr_init(&attr);
-    if (posix_spawnattr_set_persona_np(&attr, 99, POSIX_SPAWN_PERSONA_FLAGS_OVERRIDE) == 0 &&
-        posix_spawnattr_set_persona_uid_np(&attr, 0) == 0 &&
-        posix_spawnattr_set_persona_gid_np(&attr, 0) == 0) {
-        posix_spawnattr_setpgroup(&attr, 0);
-        posix_spawnattr_setflags(&attr, POSIX_SPAWN_SETPGROUP);
-        rc = posix_spawn(&child, exe, NULL, &attr, (char **)args, environ);
-    }
+    int p1 = posix_spawnattr_set_persona_np(&attr, 99, POSIX_SPAWN_PERSONA_FLAGS_OVERRIDE);
+    int p2 = posix_spawnattr_set_persona_uid_np(&attr, 0);
+    int p3 = posix_spawnattr_set_persona_gid_np(&attr, 0);
+    QFLog(@"persona calls: set=%d uid=%d gid=%d", p1, p2, p3);
+    rc = posix_spawn(&child, exe, NULL, &attr, (char **)args, environ);
+    QFLog(@"posix_spawn(persona) rc=%d child=%d", rc, child);
     posix_spawnattr_destroy(&attr);
 
     // 退路: 不带 persona 直接启动
     if (rc != 0) {
+        QFLog(@"persona spawn failed rc=%d, falling back to plain spawn", rc);
         posix_spawnattr_t attr2;
         posix_spawnattr_init(&attr2);
         posix_spawnattr_setpgroup(&attr2, 0);
         posix_spawnattr_setflags(&attr2, POSIX_SPAWN_SETPGROUP);
         rc = posix_spawn(&child, exe, NULL, &attr2, (char **)args, environ);
+        QFLog(@"posix_spawn(plain) rc=%d child=%d", rc, child);
         posix_spawnattr_destroy(&attr2);
     }
 
     if (rc == 0) {
         int st = 0;
         waitpid(child, &st, WNOHANG);   // 不等待, 让它独立跑
-        NSLog(@"[QFMonitor] HUD spawned pid=%d", child);
+        QFLog(@"HUD spawned pid=%d", child);
     } else {
-        NSLog(@"[QFMonitor] HUD spawn failed rc=%d", rc);
+        QFLog(@"HUD spawn FAILED rc=%d (%s)", rc, strerror(rc));
     }
     free(exe);
 }
