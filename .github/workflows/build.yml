@@ -1,0 +1,46 @@
+name: Build IPA
+
+on:
+  push:
+    branches: [ main, master ]
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: macos-13
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install theos
+        run: |
+          export THEOS="$HOME/theos"
+          export THEOS_SDKSERVER=disabled
+          git clone --recursive https://github.com/theos/theos.git "$THEOS"
+          # macOS 上 theos 可直接用自带的 Apple SDK，无需额外下载 iPhoneOS.sdk
+          ls ~/theos
+
+      - name: Build app
+        run: |
+          export THEOS="$HOME/theos"
+          export PATH="$THEOS/bin:$PATH"
+          make clean || true
+          make
+          ls -la
+          # theos 产物在 .theos/_/Applications/QFMonitor.app
+
+      - name: Package IPA
+        run: |
+          APP=.theos/_/Applications/QFMonitor.app
+          if [ ! -d "$APP" ]; then echo "app not found"; find .theos -name "*.app" -maxdepth 4; exit 1; fi
+          PAYLOAD=build/Payload
+          mkdir -p "$PAYLOAD"
+          cp -R "$APP" "$PAYLOAD/QFMonitor.app"
+          cd build && zip -r ../QFMonitor.ipa Payload
+          ls -la ../QFMonitor.ipa
+
+      - name: Upload IPA
+        uses: actions/upload-artifact@v4
+        with:
+          name: QFMonitor.ipa
+          path: QFMonitor.ipa
+          if-no-files-found: error

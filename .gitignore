@@ -1,0 +1,6 @@
+*.o
+*.ipa
+*.app
+.DS_Store
+build/
+theos/
