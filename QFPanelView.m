@@ -148,7 +148,6 @@
     y += 32;
 
     // 4 档预设
-    NSArray<NSNumber*> *presets = @[@(9), @(11), @(14), @(18)];
     NSArray<NSString*> *names = @[@"小9", @"标准11", @"大14", @"特大18"];
     CGFloat pw = (w - 40 - 12*3) / 4.0;
     _presetButtons = [NSMutableArray array];
