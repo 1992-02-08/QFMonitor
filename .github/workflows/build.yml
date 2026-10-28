@@ -15,7 +15,7 @@ jobs:
       - name: Install build tools
         run: |
           sudo apt-get update
-          sudo apt-get install -y clang lld llvm ldid zip curl git
+          sudo apt-get install -y clang lld llvm ldid zip curl git python3
 
       - name: Download iOS SDK
         run: |
@@ -26,7 +26,6 @@ jobs:
 
       - name: Patch SDK TBD files for standard lld
         run: |
-          # 修复 arm64e.x1-ios 导致普通 lld 报错的问题
           python3 -c '
 import os, glob
 sdk_path = glob.glob("/tmp/sdk/**/iPhoneOS*.sdk", recursive=True)[0]
@@ -41,14 +40,16 @@ for root, _, files in os.walk(sdk_path):
             fp = os.path.join(root, file)
             try:
                 with open(fp, "r", encoding="utf-8", errors="ignore") as f:
-                    txt = f.read()
-                if "arm64e.x1-ios" in txt or "- targets:" in txt:
-                    # 简单清理掉特殊 target 字段，防止 Linux lld 识别失败
-                    new_txt = txt.replace("arm64e.x1-ios", "arm64-ios")
-                    if new_txt != txt:
-                        with open(fp, "w", encoding="utf-8") as f:
-                            f.write(new_txt)
-                        count += 1
+                    lines = f.readlines()
+                new_lines = []
+                for line in lines:
+                    if "arm64e.x1-ios" in line:
+                        continue
+                    new_lines.append(line)
+                new_txt = "".join(new_lines)
+                with open(fp, "w", encoding="utf-8") as f:
+                    f.write(new_txt)
+                count += 1
             except Exception as e:
                 pass
 print(f"Patched {count} TBD files")
@@ -64,7 +65,6 @@ print(f"Patched {count} TBD files")
                 -isysroot "$SDK_PATH" \
                 -fobjc-arc \
                 -O2 \
-                -fmodules \
                 -c main.m QFAppDelegate.m QFMonitorController.m QFRowView.m QFPanelView.m QFMetrics.m QFPrefs.m
           
           echo "Linking binary with lld..."
