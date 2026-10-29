@@ -43,8 +43,8 @@
 + (UIColor *)rowBg { return [UIColor colorWithWhite:1.0 alpha:0.075]; }
 + (UIColor *)divider { return [UIColor colorWithWhite:1.0 alpha:0.075]; }
 + (UIColor *)muted { return [UIColor colorWithWhite:1.0 alpha:0.52]; }
-+
-+- (void)buildUI {
+
+- (void)buildUI {
     CGFloat W = CGRectGetWidth(self.bounds) > 0 ? CGRectGetWidth(self.bounds) : 390.0;
     self.contentWidth = W - 2.0 * QFPMargin;
 
