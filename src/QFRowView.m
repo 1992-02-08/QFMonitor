@@ -1,5 +1,6 @@
 //
 //  QFRowView.m
+//  QFMonitor — 按参考图实现的半透明圆角悬浮条
 //
 
 #import "QFRowView.h"
@@ -9,6 +10,7 @@
 @interface QFRowView ()
 @property (nonatomic, strong) UILabel   *metricsLabel;
 @property (nonatomic, strong) UIButton  *gearButton;
+@property (nonatomic, strong) UIView    *capsuleView;
 @property (nonatomic, assign) CGPoint   dragStartCenter;
 @property (nonatomic, assign) CGFloat   currentFontSize;
 @end
@@ -17,35 +19,33 @@
 
 - (instancetype)initWithFrame:(CGRect)frame {
     if (self = [super initWithFrame:frame]) {
-        // 彻底无背景
         self.backgroundColor = [UIColor clearColor];
         self.opaque = NO;
-        self.layer.borderWidth = 0;
-        self.layer.cornerRadius = 0;
-        self.layer.shadowOpacity = 0;
         self.userInteractionEnabled = YES;
 
+        _capsuleView = [[UIView alloc] initWithFrame:CGRectZero];
+        _capsuleView.backgroundColor = [UIColor colorWithWhite:0.015 alpha:0.78];
+        _capsuleView.layer.cornerRadius = 14.0;
+        _capsuleView.layer.masksToBounds = YES;
+        [self addSubview:_capsuleView];
+
         _metricsLabel = [[UILabel alloc] initWithFrame:CGRectZero];
-        _metricsLabel.numberOfLines = 0;                 // 允许换行成多行
+        _metricsLabel.numberOfLines = 0;
         _metricsLabel.lineBreakMode = NSLineBreakByCharWrapping;
         _metricsLabel.backgroundColor = [UIColor clearColor];
         _metricsLabel.textAlignment = NSTextAlignmentLeft;
-        [self addSubview:_metricsLabel];
+        [_capsuleView addSubview:_metricsLabel];
 
         _gearButton = [UIButton buttonWithType:UIButtonTypeCustom];
         _gearButton.backgroundColor = [UIColor clearColor];
         _gearButton.adjustsImageWhenHighlighted = NO;
-        [_gearButton addTarget:self
-                        action:@selector(onGear)
-              forControlEvents:UIControlEventTouchUpInside];
-        [self addSubview:_gearButton];
+        [_gearButton addTarget:self action:@selector(onGear) forControlEvents:UIControlEventTouchUpInside];
+        [_capsuleView addSubview:_gearButton];
 
-        UIPanGestureRecognizer *pan =
-            [[UIPanGestureRecognizer alloc] initWithTarget:self action:@selector(onPan:)];
+        UIPanGestureRecognizer *pan = [[UIPanGestureRecognizer alloc] initWithTarget:self action:@selector(onPan:)];
         [self addGestureRecognizer:pan];
 
-        UITapGestureRecognizer *dbl =
-            [[UITapGestureRecognizer alloc] initWithTarget:self action:@selector(onGear)];
+        UITapGestureRecognizer *dbl = [[UITapGestureRecognizer alloc] initWithTarget:self action:@selector(onGear)];
         dbl.numberOfTapsRequired = 2;
         [self addGestureRecognizer:dbl];
 
@@ -54,201 +54,148 @@
     return self;
 }
 
-#pragma mark - 配色
-
-+ (NSArray<UIColor *> *)accentPalette {
-    return @[
-        [UIColor colorWithRed:0.36 green:0.86 blue:1.00 alpha:1.0],   // 0 青
-        [UIColor colorWithRed:0.40 green:0.90 blue:0.60 alpha:1.0],   // 1 绿
-        [UIColor colorWithRed:1.00 green:0.70 blue:0.32 alpha:1.0],   // 2 橙
-        [UIColor colorWithRed:0.72 green:0.60 blue:1.00 alpha:1.0],   // 3 紫
-        [UIColor colorWithRed:1.00 green:1.00 blue:1.00 alpha:1.0],   // 4 白
-        [UIColor colorWithRed:1.00 green:0.52 blue:0.74 alpha:1.0],   // 5 粉
-    ];
-}
-
-+ (UIColor *)dimColor {
-    return [UIColor colorWithWhite:1.0 alpha:0.55];
-}
-
-+ (UIColor *)hotColor {
-    return [UIColor colorWithRed:1.00 green:0.42 blue:0.42 alpha:1.0];
-}
-
-#pragma mark - 文字构建
-
-- (NSAttributedString *)buildText {
-    return [self buildTextWithFontSize:self.currentFontSize];
-}
+#pragma mark - 富文本
 
 - (NSString *)buildTextPlain {
     QFPrefs *p = [QFPrefs shared];
     QFMetrics *m = [QFMetrics shared];
     NSMutableArray<NSString *> *segs = [NSMutableArray array];
-
-    if (p.showCPU)   [segs addObject:[NSString stringWithFormat:@"CPU %.0f%%", m.cpuPercent]];
-    if (p.showFPS)   [segs addObject:[NSString stringWithFormat:@"FPS %.0f", m.fps]];
-    if (p.showUp)    [segs addObject:[NSString stringWithFormat:@"上传↑ %@", [QFMetrics formatRate:m.upBps]]];
-    if (p.showDown)  [segs addObject:[NSString stringWithFormat:@"下载↓ %@", [QFMetrics formatRate:m.downBps]]];
-    if (p.showBattery)
-        [segs addObject:[NSString stringWithFormat:@"电池 %d%%%@", m.batteryPercent, m.charging ? @"⚡" : @""]];
+    if (p.showCPU) [segs addObject:[NSString stringWithFormat:@"CPU %.0f%%", m.cpuPercent]];
+    if (p.showFPS) [segs addObject:[NSString stringWithFormat:@"FPS %.0f", m.fps]];
+    if (p.showUp) [segs addObject:[NSString stringWithFormat:@"上传↑ %@", [QFMetrics formatRate:m.upBps]]];
+    if (p.showDown) [segs addObject:[NSString stringWithFormat:@"下载↓ %@", [QFMetrics formatRate:m.downBps]]];
+    if (p.showBattery) [segs addObject:[NSString stringWithFormat:@"电池 %d%%%@", m.batteryPercent, m.charging ? @"⚡" : @""]];
     if (p.showCurrent) {
-        NSString *c = m.currentValid ? [NSString stringWithFormat:@"%ldmA", (long)lround(m.currentMa)] : @"--mA";
-        [segs addObject:[@"电流 " stringByAppendingString:c]];
+        NSString *v = m.currentValid ? [NSString stringWithFormat:@"%ldmA", (long)lround(m.currentMa)] : @"--mA";
+        [segs addObject:[@"电流 " stringByAppendingString:v]];
     }
     if (p.showPower) {
-        NSString *w = m.wattValid ? [NSString stringWithFormat:@"%.1fW", m.watt] : @"--W";
-        [segs addObject:[@"瓦数 " stringByAppendingString:w]];
+        NSString *v = m.wattValid ? [NSString stringWithFormat:@"%.1fW", m.watt] : @"--W";
+        [segs addObject:[@"瓦数 " stringByAppendingString:v]];
     }
     if (p.showTemp) {
-        NSString *t = (m.temperatureC > -100.0) ? [NSString stringWithFormat:@"%.0f°C", m.temperatureC] : @"--°C";
-        [segs addObject:[@"温度 " stringByAppendingString:t]];
+        NSString *v = m.temperatureC > -100.0 ? [NSString stringWithFormat:@"%.0f°C", m.temperatureC] : @"--°C";
+        [segs addObject:[@"温度 " stringByAppendingString:v]];
     }
-
-    NSMutableString *s = [[segs componentsJoinedByString:@"  "] mutableCopy];
-    if (p.locked) {
-        if (s.length) [s appendString:@"  "];
-        [s appendString:@"🔒"];
-    }
-    if (s.length == 0) s = [@"QFMonitor" mutableCopy];
-    return s;
+    NSString *s = [segs componentsJoinedByString:@"  "];
+    if ([QFPrefs shared].locked) s = s.length ? [s stringByAppendingString:@"  🔒"] : @"🔒";
+    return s.length ? s : @"QFMonitor";
 }
 
-- (void)rebuildTextWithFontSize:(CGFloat)fs {
-    [self rebuildTextWithFontSize:fs constrainedToWidth:CGFLOAT_MAX];
+- (UIColor *)colorFor:(NSInteger)i {
+    NSArray *c = @[
+        [UIColor colorWithRed:0.30 green:0.79 blue:0.96 alpha:1.0],
+        [UIColor colorWithRed:0.65 green:0.55 blue:0.98 alpha:1.0],
+        [UIColor colorWithRed:0.20 green:0.83 blue:0.60 alpha:1.0],
+        [UIColor colorWithRed:0.98 green:0.75 blue:0.14 alpha:1.0],
+        [UIColor colorWithRed:0.96 green:0.45 blue:0.71 alpha:1.0],
+        [UIColor colorWithRed:0.98 green:0.44 blue:0.52 alpha:1.0],
+        [UIColor colorWithRed:0.98 green:0.57 blue:0.24 alpha:1.0],
+        [UIColor colorWithRed:0.97 green:0.44 blue:0.44 alpha:1.0],
+    ];
+    return c[MIN(MAX(i, 0), 7)];
 }
 
-- (void)rebuildTextWithFontSize:(CGFloat)fs constrainedToWidth:(CGFloat)width {
-    NSAttributedString *as = [self buildTextWithFontSize:fs];
-    NSMutableAttributedString *m = [as mutableCopy];
-
-    NSMutableParagraphStyle *ps = [[NSMutableParagraphStyle alloc] init];
-    ps.lineBreakMode = NSLineBreakByCharWrapping;
-    ps.alignment = NSTextAlignmentLeft;
-    ps.lineSpacing = 1.0;
-    [m addAttribute:NSParagraphStyleAttributeName value:ps range:NSMakeRange(0, m.length)];
-
-    self.metricsLabel.attributedText = m;
-    self.metricsLabel.lineBreakMode = NSLineBreakByCharWrapping;
-    self.metricsLabel.numberOfLines = 0;
+- (NSAttributedString *)att:(NSString *)text font:(UIFont *)font color:(UIColor *)color {
+    NSMutableDictionary *d = [NSMutableDictionary dictionary];
+    d[NSFontAttributeName] = font;
+    d[NSForegroundColorAttributeName] = color ?: UIColor.whiteColor;
+    NSShadow *shadow = [[NSShadow alloc] init];
+    shadow.shadowColor = [UIColor colorWithWhite:0 alpha:0.95];
+    shadow.shadowBlurRadius = 1.15;
+    shadow.shadowOffset = CGSizeZero;
+    d[NSShadowAttributeName] = shadow;
+    return [[NSAttributedString alloc] initWithString:text ?: @"" attributes:d];
 }
 
 - (NSAttributedString *)buildTextWithFontSize:(CGFloat)fontSize {
     QFPrefs *p = [QFPrefs shared];
     QFMetrics *m = [QFMetrics shared];
+    CGFloat fs = MAX(6.0, MIN(46.0, fontSize));
+    UIFont *font = [UIFont monospacedDigitSystemFontOfSize:fs weight:UIFontWeightSemibold];
+    NSMutableArray *parts = [NSMutableArray array];
 
-    CGFloat fs = fontSize;
-    if (fs < 6.0) fs = 6.0;
-    if (fs > 46.0) fs = 46.0;
-
-    UIFont *nf = [UIFont monospacedDigitSystemFontOfSize:fs
-                                                  weight:UIFontWeightSemibold];
-    UIColor *white = [UIColor whiteColor];
-
-    NSMutableArray *segs = [NSMutableArray array];
-
-    // CPU → FPS → 上传↑ → 下载↓ → 电池 → 电流 → 瓦数 → 温度
     if (p.showCPU) {
-        NSMutableAttributedString *a = [[NSMutableAttributedString alloc] init];
-        [a appendAttributedString:[self att:@"CPU " font:nf color:[self colorFor:0]]];
-        [a appendAttributedString:[self att:[NSString stringWithFormat:@"%.0f%%", m.cpuPercent] font:nf color:[self colorFor:0]]];
-        [segs addObject:a];
+        NSMutableAttributedString *a = [NSMutableAttributedString new];
+        [a appendAttributedString:[self att:@"CPU " font:font color:[self colorFor:0]]];
+        [a appendAttributedString:[self att:[NSString stringWithFormat:@"%.0f%%", m.cpuPercent] font:font color:[self colorFor:0]]];
+        [parts addObject:a];
     }
     if (p.showFPS) {
-        NSMutableAttributedString *a = [[NSMutableAttributedString alloc] init];
-        [a appendAttributedString:[self att:@"FPS " font:nf color:[self colorFor:1]]];
-        [a appendAttributedString:[self att:[NSString stringWithFormat:@"%.0f", m.fps] font:nf color:[self colorFor:1]]];
-        [segs addObject:a];
+        NSMutableAttributedString *a = [NSMutableAttributedString new];
+        [a appendAttributedString:[self att:@"FPS " font:font color:[self colorFor:1]]];
+        [a appendAttributedString:[self att:[NSString stringWithFormat:@"%.0f", m.fps] font:font color:[self colorFor:1]]];
+        [parts addObject:a];
     }
     if (p.showUp) {
-        NSMutableAttributedString *a = [[NSMutableAttributedString alloc] init];
-        [a appendAttributedString:[self att:@"上传↑ " font:nf color:[self colorFor:2]]];
-        [a appendAttributedString:[self att:[QFMetrics formatRate:m.upBps] font:nf color:[self colorFor:2]]];
-        [segs addObject:a];
+        NSMutableAttributedString *a = [NSMutableAttributedString new];
+        [a appendAttributedString:[self att:@"上传↑ " font:font color:[self colorFor:2]]];
+        [a appendAttributedString:[self att:[QFMetrics formatRate:m.upBps] font:font color:[self colorFor:2]]];
+        [parts addObject:a];
     }
     if (p.showDown) {
-        NSMutableAttributedString *a = [[NSMutableAttributedString alloc] init];
-        [a appendAttributedString:[self att:@"下载↓ " font:nf color:[self colorFor:3]]];
-        [a appendAttributedString:[self att:[QFMetrics formatRate:m.downBps] font:nf color:[self colorFor:3]]];
-        [segs addObject:a];
+        NSMutableAttributedString *a = [NSMutableAttributedString new];
+        [a appendAttributedString:[self att:@"下载↓ " font:font color:[self colorFor:3]]];
+        [a appendAttributedString:[self att:[QFMetrics formatRate:m.downBps] font:font color:[self colorFor:3]]];
+        [parts addObject:a];
     }
     if (p.showBattery) {
-        NSMutableAttributedString *a = [[NSMutableAttributedString alloc] init];
-        [a appendAttributedString:[self att:@"电池 " font:nf color:[self colorFor:4]]];
-        [a appendAttributedString:[self att:[NSString stringWithFormat:@"%d%%%@", m.batteryPercent, m.charging ? @"⚡" : @""] font:nf color:[self colorFor:4]]];
-        [segs addObject:a];
+        NSMutableAttributedString *a = [NSMutableAttributedString new];
+        [a appendAttributedString:[self att:@"电池 " font:font color:[self colorFor:4]]];
+        [a appendAttributedString:[self att:[NSString stringWithFormat:@"%d%%%@", m.batteryPercent, m.charging ? @"⚡" : @""] font:font color:[self colorFor:4]]];
+        [parts addObject:a];
     }
     if (p.showCurrent) {
-        NSString *c = m.currentValid ? [NSString stringWithFormat:@"%ldmA", (long)lround(m.currentMa)] : @"--mA";
-        NSMutableAttributedString *a = [[NSMutableAttributedString alloc] init];
-        [a appendAttributedString:[self att:@"电流 " font:nf color:[self colorFor:5]]];
-        [a appendAttributedString:[self att:c font:nf color:[self colorFor:5]]];
-        [segs addObject:a];
+        NSString *v = m.currentValid ? [NSString stringWithFormat:@"%ldmA", (long)lround(m.currentMa)] : @"--mA";
+        NSMutableAttributedString *a = [NSMutableAttributedString new];
+        [a appendAttributedString:[self att:@"电流 " font:font color:[self colorFor:5]]];
+        [a appendAttributedString:[self att:v font:font color:[self colorFor:5]]];
+        [parts addObject:a];
     }
     if (p.showPower) {
-        NSString *w = m.wattValid ? [NSString stringWithFormat:@"%.1fW", m.watt] : @"--W";
-        NSMutableAttributedString *a = [[NSMutableAttributedString alloc] init];
-        [a appendAttributedString:[self att:@"瓦数 " font:nf color:[self colorFor:6]]];
-        [a appendAttributedString:[self att:w font:nf color:[self colorFor:6]]];
-        [segs addObject:a];
+        NSString *v = m.wattValid ? [NSString stringWithFormat:@"%.1fW", m.watt] : @"--W";
+        NSMutableAttributedString *a = [NSMutableAttributedString new];
+        [a appendAttributedString:[self att:@"瓦数 " font:font color:[self colorFor:6]]];
+        [a appendAttributedString:[self att:v font:font color:[self colorFor:6]]];
+        [parts addObject:a];
     }
     if (p.showTemp) {
-        NSString *t = (m.temperatureC > -100.0) ? [NSString stringWithFormat:@"%.0f°C", m.temperatureC] : @"--°C";
-        NSMutableAttributedString *a = [[NSMutableAttributedString alloc] init];
-        [a appendAttributedString:[self att:@"温度 " font:nf color:[self colorFor:7]]];
-        [a appendAttributedString:[self att:t font:nf color:[self colorFor:7]]];
-        [segs addObject:a];
+        NSString *v = m.temperatureC > -100.0 ? [NSString stringWithFormat:@"%.0f°C", m.temperatureC] : @"--°C";
+        NSMutableAttributedString *a = [NSMutableAttributedString new];
+        [a appendAttributedString:[self att:@"温度 " font:font color:[self colorFor:7]]];
+        [a appendAttributedString:[self att:v font:font color:[self colorFor:7]]];
+        [parts addObject:a];
     }
 
-    NSMutableAttributedString *out = [[NSMutableAttributedString alloc] init];
-    for (NSInteger i = 0; i < (NSInteger)segs.count; i++) {
-        if (i > 0) [out appendAttributedString:[self att:@"  " font:nf color:white]];
-        [out appendAttributedString:segs[i]];
+    NSMutableAttributedString *out = [NSMutableAttributedString new];
+    for (NSInteger i = 0; i < (NSInteger)parts.count; i++) {
+        if (i) [out appendAttributedString:[self att:@"  " font:font color:UIColor.whiteColor]];
+        [out appendAttributedString:parts[i]];
     }
     if (p.locked) {
-        if (out.length) [out appendAttributedString:[self att:@"  " font:nf color:white]];
-        [out appendAttributedString:[self att:@"🔒" font:nf color:[self colorFor:3]]];
+        if (out.length) [out appendAttributedString:[self att:@"  " font:font color:UIColor.whiteColor]];
+        [out appendAttributedString:[self att:@"🔒" font:font color:[self colorFor:3]]];
     }
-    if (!out.length) {
-        out = [[NSMutableAttributedString alloc] initWithAttributedString:[self att:@"QFMonitor" font:nf color:[self colorFor:0]]];
-    }
+    if (!out.length) [out appendAttributedString:[self att:@"QFMonitor" font:font color:[self colorFor:0]]];
     return out;
 }
 
-// 8 种颜色: CPU青 / FPS紫 / 上传绿 / 下载琥珀 / 电池粉 / 电流玫红 / 瓦数橙 / 温度红
-- (UIColor *)colorFor:(NSInteger)i {
-    NSArray *c = @[
-        [UIColor colorWithRed:0.30 green:0.79 blue:0.96 alpha:1.0], // 0 CPU 青
-        [UIColor colorWithRed:0.65 green:0.55 blue:0.98 alpha:1.0], // 1 FPS 紫
-        [UIColor colorWithRed:0.20 green:0.83 blue:0.60 alpha:1.0], // 2 上传 绿
-        [UIColor colorWithRed:0.98 green:0.75 blue:0.14 alpha:1.0], // 3 下载 琥珀
-        [UIColor colorWithRed:0.96 green:0.45 blue:0.71 alpha:1.0], // 4 电池 粉
-        [UIColor colorWithRed:0.98 green:0.44 blue:0.52 alpha:1.0], // 5 电流 玫红
-        [UIColor colorWithRed:0.98 green:0.57 blue:0.24 alpha:1.0], // 6 瓦数 橙
-        [UIColor colorWithRed:0.97 green:0.44 blue:0.44 alpha:1.0], // 7 温度 红
-    ];
-    return c[MIN(MAX(i, 0), 7)];
+- (void)rebuildTextWithFontSize:(CGFloat)fs constrainedToWidth:(CGFloat)width {
+    NSMutableAttributedString *text = [[self buildTextWithFontSize:fs] mutableCopy];
+    NSMutableParagraphStyle *style = [[NSMutableParagraphStyle alloc] init];
+    style.lineBreakMode = NSLineBreakByCharWrapping;
+    style.alignment = NSTextAlignmentLeft;
+    style.lineSpacing = 0.0;
+    [text addAttribute:NSParagraphStyleAttributeName value:style range:NSMakeRange(0, text.length)];
+    self.metricsLabel.attributedText = text;
+    self.metricsLabel.preferredMaxLayoutWidth = width;
+    self.metricsLabel.numberOfLines = 0;
+    self.metricsLabel.lineBreakMode = NSLineBreakByCharWrapping;
 }
 
-- (NSAttributedString *)att:(NSString *)t font:(UIFont *)f color:(UIColor *)c {
-    NSMutableDictionary *d = [NSMutableDictionary dictionary];
-    if (f) d[NSFontAttributeName] = f;
-    d[NSForegroundColorAttributeName] = c ?: [UIColor whiteColor];
-    // 极紧的文字描边感(blur 1.2, 零偏移), 只为在浅色壁纸上也能看清,
-    // 不会形成任何"底色"。
-    NSShadow *sh = [[NSShadow alloc] init];
-    sh.shadowColor = [UIColor colorWithWhite:0.0 alpha:0.9];
-    sh.shadowBlurRadius = 1.2;
-    sh.shadowOffset = CGSizeZero;
-    d[NSShadowAttributeName] = sh;
-    return [[NSAttributedString alloc] initWithString:(t ?: @"") attributes:d];
-}
+#pragma mark - 刷新与布局
 
-#pragma mark - 刷新
-
-- (void)refreshText {
-    [self refreshTextConstrainedToWidth:CGFLOAT_MAX];
-}
+- (void)refreshText { [self refreshTextConstrainedToWidth:CGFLOAT_MAX]; }
 
 - (void)refreshTextConstrainedToWidth:(CGFloat)maxWidth {
     if (maxWidth <= 1.0) maxWidth = CGFLOAT_MAX;
@@ -257,142 +204,77 @@
 
 - (void)applyPrefs {
     QFPrefs *p = [QFPrefs shared];
-
-    CGFloat fs = p.fontSize * p.scale;
-    if (fs < 6.0) fs = 6.0;
-    if (fs > 46.0) fs = 46.0;
-    self.currentFontSize = fs;
-
-    UIColor *accent = [[self class] accentPalette][MIN(MAX(p.accent, 0), 5)];
-
-    [self configureGearForSize:fs];
-
+    self.currentFontSize = MAX(6.0, MIN(46.0, p.fontSize * p.scale));
+    [self configureGearForSize:self.currentFontSize];
     CGFloat w = CGRectGetWidth(self.window.bounds);
     [self refreshTextConstrainedToWidth:(w > 0 ? w - 16.0 : CGFLOAT_MAX)];
 }
 
 - (void)configureGearForSize:(CGFloat)fs {
-    QFPrefs *p = [QFPrefs shared];
-    UIColor *accent = [[self class] accentPalette][MIN(MAX(p.accent, 0), 5)];
-
-    UIImageSymbolConfiguration *cfg =
-        [UIImageSymbolConfiguration configurationWithPointSize:fs * 0.95
-                                                         weight:UIImageSymbolWeightSemibold];
-    UIImage *img = [UIImage systemImageNamed:@"gearshape"
-                       withConfiguration:cfg];
-    if (img) {
-        [self.gearButton setImage:[img imageWithRenderingMode:UIImageRenderingModeAlwaysTemplate]
-                         forState:UIControlStateNormal];
-    }
-    self.gearButton.tintColor = accent;
+    UIImageSymbolConfiguration *cfg = [UIImageSymbolConfiguration configurationWithPointSize:MAX(8.0, fs * 0.95) weight:UIImageSymbolWeightSemibold];
+    UIImage *image = [UIImage systemImageNamed:@"gearshape.fill" withConfiguration:cfg];
+    if (image) [self.gearButton setImage:[image imageWithRenderingMode:UIImageRenderingModeAlwaysTemplate] forState:UIControlStateNormal];
+    self.gearButton.tintColor = [UIColor colorWithWhite:1.0 alpha:0.72];
 }
 
-- (void)relayout {
-    [self relayoutConstrainedToWidth:CGFLOAT_MAX];
-}
+- (void)relayout { [self relayoutConstrainedToWidth:CGFLOAT_MAX]; }
 
-// 在给定最大宽度内布局: 绝不缩字号, 用自动换行(多行)适配宽度
 - (void)relayoutConstrainedToWidth:(CGFloat)maxWidth {
     if (maxWidth <= 1.0) maxWidth = CGFLOAT_MAX;
+    CGFloat fs = self.currentFontSize > 0 ? self.currentFontSize : MAX(6.0, [QFPrefs shared].fontSize * [QFPrefs shared].scale);
+    CGFloat horizontal = MAX(7.0, fs * 0.62);
+    CGFloat vertical = MAX(5.0, fs * 0.42);
+    CGFloat gearSize = MAX(10.0, fs * 0.95);
+    CGFloat gearGap = MAX(4.0, fs * 0.40);
+    CGFloat innerMax = maxWidth == CGFLOAT_MAX ? CGFLOAT_MAX : MAX(40.0, maxWidth - horizontal * 2.0 - gearSize - gearGap);
 
-    CGFloat fs = self.currentFontSize;
+    [self rebuildTextWithFontSize:fs constrainedToWidth:innerMax];
+    CGSize ms = [self.metricsLabel sizeThatFits:CGSizeMake(innerMax, CGFLOAT_MAX)];
+    ms.width = ceil(MIN(ms.width, innerMax));
+    ms.height = ceil(MAX(ms.height, fs));
 
-    // 齿轮固定在右侧
-    CGFloat gearSize = MAX(8.0, fs * 0.95);
-    CGFloat gap = MAX(3.0, fs * 0.45);
+    CGFloat totalW = ms.width + horizontal * 2.0 + gearGap + gearSize;
+    CGFloat totalH = ms.height + vertical * 2.0;
+    if (maxWidth != CGFLOAT_MAX) totalW = MIN(totalW, maxWidth);
+    totalW = MAX(totalW, gearSize + horizontal * 2.0 + 24.0);
+    totalH = MAX(totalH, gearSize + vertical * 2.0);
 
-    // 文字可用宽度
-    CGFloat textW;
-    if (maxWidth == CGFLOAT_MAX) {
-        // 无约束: 按自然宽度单行
-        UIFont *font = [UIFont monospacedDigitSystemFontOfSize:fs weight:UIFontWeightSemibold];
-        NSString *plain = [self buildTextPlain];
-        textW = ceil([plain sizeWithAttributes:@{NSFontAttributeName: font}].width) + 1.0;
-    } else {
-        textW = maxWidth - gearSize - gap;
-        if (textW < 40.0) textW = maxWidth;   // 极端窄屏: 文字占满, 齿轮叠上
-    }
+    CGPoint oldCenter = self.center;
+    self.bounds = CGRectMake(0, 0, ceil(totalW), ceil(totalH));
+    self.center = oldCenter;
+    self.capsuleView.frame = self.bounds;
+    self.capsuleView.layer.cornerRadius = MIN(16.0, totalH / 2.0);
 
-    // 重建富文本(按最终宽度换行)
-    [self rebuildTextWithFontSize:fs constrainedToWidth:textW];
-    [self configureGearForSize:fs];
-
-    // 关键: UILabel 多行测量必须设置 preferredMaxLayoutWidth, 否则 sizeThatFits 会按单行返回
-    self.metricsLabel.preferredMaxLayoutWidth = textW;
-    self.metricsLabel.numberOfLines = 0;
-    self.metricsLabel.lineBreakMode = NSLineBreakByCharWrapping;
-
-    // 用 textW 计算换行后的实际高度
-    CGSize ms = [self.metricsLabel sizeThatFits:CGSizeMake(textW, CGFLOAT_MAX)];
-    ms.width = ceil(MIN(ms.width, textW));
-    ms.height = ceil(ms.height);
-
-    CGSize total = CGSizeMake(ms.width + gap + gearSize, MAX(ms.height, gearSize));
-    if (maxWidth != CGFLOAT_MAX && total.width > maxWidth) {
-        total.width = maxWidth;
-    }
-
-    self.metricsLabel.frame = CGRectMake(0, (total.height - ms.height) / 2.0,
-                                         ms.width, ms.height);
-    self.gearButton.frame = CGRectMake(total.width - gearSize,
-                                       (total.height - gearSize) / 2.0,
-                                       gearSize, gearSize);
-
-    // 保持中心不变
-    CGPoint c = self.center;
-    self.bounds = CGRectMake(0, 0, total.width, total.height);
-    self.center = c;
+    self.metricsLabel.frame = CGRectMake(horizontal, vertical, MIN(ms.width, totalW - horizontal * 2.0 - gearGap - gearSize), ms.height);
+    self.gearButton.frame = CGRectMake(totalW - horizontal - gearSize, (totalH - gearSize) / 2.0, gearSize, gearSize);
 }
 
-#pragma mark - 手势
+#pragma mark - 交互
 
 - (void)onGear {
-    if ([self.delegate respondsToSelector:@selector(rowViewDidTapSettings:)]) {
-        [self.delegate rowViewDidTapSettings:self];
-    }
+    if ([self.delegate respondsToSelector:@selector(rowViewDidTapSettings:)]) [self.delegate rowViewDidTapSettings:self];
 }
 
 - (void)onPan:(UIPanGestureRecognizer *)g {
     UIView *sup = self.superview;
     if (!sup) return;
-
     QFPrefs *p = [QFPrefs shared];
-    // 锁定位置 或 关闭自由移动 → 拖动无效
     if (p.locked || !p.freeDrag) {
-        if (g.state == UIGestureRecognizerStateEnded ||
-            g.state == UIGestureRecognizerStateCancelled) {
-            [g setTranslation:CGPointZero inView:sup];
-        }
+        if (g.state == UIGestureRecognizerStateEnded || g.state == UIGestureRecognizerStateCancelled) [g setTranslation:CGPointZero inView:sup];
         return;
     }
-
-    if (g.state == UIGestureRecognizerStateBegan) {
-        self.dragStartCenter = self.center;
-    }
-
+    if (g.state == UIGestureRecognizerStateBegan) self.dragStartCenter = self.center;
     CGPoint t = [g translationInView:sup];
-    CGPoint c = CGPointMake(self.dragStartCenter.x + t.x,
-                             self.dragStartCenter.y + t.y);
-
-    // 限制在父视图内
+    CGPoint c = CGPointMake(self.dragStartCenter.x + t.x, self.dragStartCenter.y + t.y);
     CGRect b = sup.bounds;
     CGFloat hw = CGRectGetWidth(self.bounds) / 2.0;
     CGFloat hh = CGRectGetHeight(self.bounds) / 2.0;
-    if (c.x < hw) c.x = hw;
-    if (c.x > CGRectGetWidth(b) - hw) c.x = CGRectGetWidth(b) - hw;
-    if (c.y < hh) c.y = hh;
-    if (c.y > CGRectGetHeight(b) - hh) c.y = CGRectGetHeight(b) - hh;
-
+    c.x = MAX(hw + 1.0, MIN(CGRectGetWidth(b) - hw - 1.0, c.x));
+    c.y = MAX(hh + 1.0, MIN(CGRectGetHeight(b) - hh - 1.0, c.y));
     self.center = c;
-
-    if ([self.delegate respondsToSelector:@selector(rowView:didDragToCenter:)]) {
-        [self.delegate rowView:self didDragToCenter:c];
-    }
-    if (g.state == UIGestureRecognizerStateEnded ||
-        g.state == UIGestureRecognizerStateCancelled) {
-        if ([self.delegate respondsToSelector:@selector(rowViewDidEndDragging:)]) {
-            [self.delegate rowViewDidEndDragging:self];
-        }
+    if ([self.delegate respondsToSelector:@selector(rowView:didDragToCenter:)]) [self.delegate rowView:self didDragToCenter:c];
+    if (g.state == UIGestureRecognizerStateEnded || g.state == UIGestureRecognizerStateCancelled) {
+        if ([self.delegate respondsToSelector:@selector(rowViewDidEndDragging:)]) [self.delegate rowViewDidEndDragging:self];
     }
 }
 

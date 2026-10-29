@@ -288,10 +288,11 @@ extern int posix_spawnattr_set_persona_gid_np(const posix_spawnattr_t * __restri
 }
 
 - (void)panelPrefsChanged:(QFPanelView *)panel {
-    // 重新读一遍偏好并重建外观
+    // 面板内状态变化后，重建悬浮条并保持面板显示内容同步
     [[QFPrefs shared] load];
     [self.rowView applyPrefs];
     [self layoutRow];
+    [panel refreshPreview];
 }
 
 - (void)panelDidRequestExit:(QFPanelView *)panel {
