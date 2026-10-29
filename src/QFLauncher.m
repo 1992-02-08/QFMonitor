@@ -70,7 +70,7 @@
 
     UILabel *sub = [[UILabel alloc] initWithFrame:CGRectZero];
     sub.translatesAutoresizingMaskIntoConstraints = NO;
-    sub.text = @"单行网速悬浮窗 · 无背景 · 自绘面板";
+    sub.text = @"网速 · 性能 · 电量 · 深色胶囊悬浮条";
     sub.font = [UIFont systemFontOfSize:13 weight:UIFontWeightRegular];
     sub.textColor = [UIColor colorWithWhite:1.0 alpha:0.55];
     [header addSubview:sub];
@@ -192,9 +192,9 @@
 
     // ---------- 说明 ----------
     UILabel *tip = [[UILabel alloc] initWithFrame:CGRectZero];
-    tip.text = @"· 悬浮条为一行纯文字，没有任何底卡或描边\n"
-                "· 拖动可自由移动，点齿轮打开设置（字号 / 缩放 / 显示项 / 配色）\n"
-                "· 若点击没有反应，可在此关闭「触摸穿透」后再点悬浮条";
+    tip.text = @"· v1.1 深色胶囊悬浮条：圆角半透明底 + 分项彩色\n"
+                "· 点悬浮条上的齿轮打开设置（显示项 / 外观 / 位置 / 锁定 / 贴边隐藏）\n"
+                "· 锁定位置后拖动无效，用位置按钮或微调移动；点击无反应请先关「触摸穿透」";
     tip.font = [UIFont systemFontOfSize:12 weight:UIFontWeightRegular];
     tip.textColor = [UIColor colorWithWhite:1.0 alpha:0.45];
     tip.numberOfLines = 0;
